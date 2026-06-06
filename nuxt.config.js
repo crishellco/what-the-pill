@@ -29,7 +29,10 @@ export default defineNuxtConfig({
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY,
     public: {
-      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || "http://localhost:3000",
+      siteUrl:
+        process.env.NUXT_PUBLIC_SITE_URL ||
+        process.env.URL ||
+        "http://localhost:3000",
     },
   },
   compatibilityDate: "2024-11-01",

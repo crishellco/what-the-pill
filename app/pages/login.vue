@@ -5,6 +5,7 @@ definePageMeta({ layout: 'default' })
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
+const { public: { siteUrl } } = useRuntimeConfig()
 const email = ref('')
 const loading = ref(false)
 const sent = ref(false)
@@ -26,7 +27,7 @@ async function sendMagicLink() {
     const { error: authError } = await supabase.auth.signInWithOtp({
       email: trimmed,
       options: {
-        emailRedirectTo: `${window.location.origin}/confirm`
+        emailRedirectTo: `${siteUrl.replace(/\/$/, '')}/confirm`
       }
     })
     if (authError) throw authError
