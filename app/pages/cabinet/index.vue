@@ -53,8 +53,10 @@ function pillPath(id) {
 
 <template>
   <div class="space-y-6">
-    <UBreadcrumb :items="[{ label: 'Cabinet' }]" />
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">My Cabinet</h1>
 
+    <div aria-live="polite" aria-atomic="true">
+    </div>
     <div v-if="!ready || cabinetLoading" class="text-center py-16 space-y-3">
       <USkeleton class="h-8 w-8 rounded-full mx-auto" />
       <p class="text-sm text-gray-400">Loading your pills…</p>
@@ -122,7 +124,7 @@ function pillPath(id) {
           </UButton>
         </UTooltip>
       </template>
-      <p v-else class="text-xs text-center text-gray-400">Add at least 2 pills to check interactions</p>
+      <p v-else class="text-xs text-center text-gray-400">Save at least 2 pills to check for interactions</p>
     </div>
 
     <UAlert v-if="error" color="error" :description="error" />

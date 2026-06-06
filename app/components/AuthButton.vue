@@ -13,7 +13,7 @@ async function signOut() {
 <template>
   <UTooltip v-if="user" text="Sign out of your account on this device">
     <UButton
-      size="xs"
+      size="sm"
       color="neutral"
       variant="ghost"
       @click="signOut"
@@ -27,7 +27,7 @@ async function signOut() {
   >
     <UButton
       to="/login"
-      size="xs"
+      size="sm"
       color="neutral"
       variant="ghost"
     >

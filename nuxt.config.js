@@ -12,6 +12,9 @@ export default defineNuxtConfig({
             "Identify pills by photo, imprint code, or description. Check drug interactions.",
         },
       ],
+      link: [
+        { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      ],
     },
   },
   supabase: {

@@ -58,9 +58,11 @@ const safetyAlertColor = computed(() => {
               </div>
               <div class="text-right shrink-0">
                 <UTooltip text="Estimated match likelihood — not a medical diagnosis">
-                  <span class="text-lg sm:text-2xl font-bold tabular-nums" :class="confidenceColor(result.confidence)">{{ result.confidence }}%</span>
+                  <span class="text-lg sm:text-2xl font-bold tabular-nums" :class="confidenceColor(result.confidence)">
+                    {{ result.confidence }}%<span class="sr-only"> confidence match</span>
+                  </span>
                 </UTooltip>
-                <p class="text-xs text-gray-400">confidence</p>
+                <p class="text-xs text-gray-400" aria-hidden="true">confidence</p>
               </div>
             </div>
             <div v-if="result.physical" class="flex flex-wrap gap-1.5 mt-3">
@@ -80,17 +82,17 @@ const safetyAlertColor = computed(() => {
 
       <div class="p-5 space-y-4">
         <div>
-          <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">What it is</p>
+          <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">What it is</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{{ result.summary }}</p>
         </div>
 
         <div v-if="result.uses">
-          <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Used for</p>
+          <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Used for</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{{ result.uses }}</p>
         </div>
 
         <div v-if="result.dosage">
-          <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Typical dose</p>
+          <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Typical dose</h3>
           <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{{ result.dosage }}</p>
         </div>
 
@@ -103,16 +105,20 @@ const safetyAlertColor = computed(() => {
         />
 
         <div v-if="result.sources?.length">
-          <p class="text-xs text-gray-400 mb-1">Sources checked</p>
-          <div class="flex flex-wrap gap-1.5">
+          <h3 class="text-xs text-gray-400 mb-1">Sources checked</h3>
+          <div class="flex flex-wrap gap-1.5" role="list">
             <UBadge
               v-for="src in result.sources"
               :key="src.name"
               :color="src.found ? 'success' : 'neutral'"
               variant="outline"
               size="sm"
-              :label="`${src.found ? '✓' : '–'} ${src.name}`"
-            />
+              role="listitem"
+            >
+              <span aria-hidden="true">{{ src.found ? '✓' : '–' }}</span>
+              <span class="sr-only">{{ src.found ? 'Found in' : 'Not found in' }}</span>
+              {{ src.name }}
+            </UBadge>
           </div>
         </div>
       </div>

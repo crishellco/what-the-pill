@@ -31,7 +31,7 @@ const imprint = computed(() => props.pill?.physical?.imprint)
     <img
       v-if="src"
       :src="src"
-      :alt="pill?.name || 'Pill'"
+      :alt="pill?.name ? `${pill.name} pill` : 'Pill photo'"
       class="w-full h-full object-contain p-1"
     >
     <div
@@ -48,6 +48,6 @@ const imprint = computed(() => props.pill?.physical?.imprint)
         {{ imprint }}
       </span>
     </div>
-    <UIcon v-else name="i-heroicons-beaker" class="w-8 h-8 text-gray-400" />
+    <UIcon v-else name="i-heroicons-beaker" class="w-8 h-8 text-gray-400" aria-hidden="true" />
   </div>
 </template>

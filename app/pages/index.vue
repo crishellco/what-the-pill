@@ -156,6 +156,7 @@ async function handleAddToCabinet(pill) {
         :items="tabs"
         :content="false"
         class="w-full"
+        aria-label="Pill identification method"
       >
         <template #default="{ item }">
           <UTooltip :text="tabTooltips[item.value]">
@@ -204,7 +205,7 @@ async function handleAddToCabinet(pill) {
           v-model="photoFile"
           accept="image/*"
           capture="environment"
-          label="Tap to take a photo or upload"
+          label="Upload a photo or take one with your camera"
           class="w-full"
         />
       </UFormField>
@@ -224,8 +225,10 @@ async function handleAddToCabinet(pill) {
       </UTooltip>
     </UCard>
 
-    <UAlert v-if="error" color="error" :description="error" />
-    <UAlert v-if="saveError" color="error" :description="saveError" />
+    <div aria-live="polite" aria-atomic="true" class="space-y-3">
+      <UAlert v-if="error" color="error" :description="error" />
+      <UAlert v-if="saveError" color="error" :description="saveError" />
+    </div>
 
     <template v-if="matches.length">
       <PillMatchList

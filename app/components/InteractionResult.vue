@@ -41,6 +41,8 @@ const severityColor = {
       </UAlert>
     </div>
 
-    <p class="text-xs text-gray-400">This is not medical advice. Always consult a pharmacist or physician.</p>
+    <p class="text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-800 pt-3 mt-1">
+      <span class="font-medium">Not medical advice.</span> Always consult a pharmacist or physician before making any medication decisions.
+    </p>
   </div>
 </template>

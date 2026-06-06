@@ -49,7 +49,7 @@ function matchClasses(match) {
         />
       </UTooltip>
     </div>
-    <div class="grid gap-2">
+    <div class="grid gap-2" role="listbox" aria-label="Pill match results">
       <UTooltip
         v-for="match in matches"
         :key="match.id"
@@ -57,6 +57,8 @@ function matchClasses(match) {
       >
         <button
           type="button"
+          role="option"
+          :aria-selected="match.id === selectedId"
           class="w-full min-w-0 flex items-start gap-2 sm:gap-3 p-3 rounded-xl border text-left transition-all overflow-hidden"
           :class="matchClasses(match)"
           @click="$emit('select', match)"
