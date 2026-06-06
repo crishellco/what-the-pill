@@ -33,5 +33,8 @@ export default defineNuxtConfig({
     },
   },
   compatibilityDate: "2024-11-01",
-  devtools: { enabled: true },
+  devtools: { enabled: process.env.NODE_ENV !== "production" },
+  nitro: {
+    preset: "netlify",
+  },
 })
