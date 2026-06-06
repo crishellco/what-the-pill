@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/cmitchell/www/info-apps/**)",
+      "Bash(npm --version)",
+      "Bash(npx nuxi@latest init . --no-install --package-manager npm)",
+      "Bash(npx nuxi@3.9.0 init /tmp/wtp-scaffold --no-install)",
+      "Read(//tmp/**)",
+      "Bash(npm install *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
