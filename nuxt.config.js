@@ -21,16 +21,17 @@ export default defineNuxtConfig({
     redirectOptions: {
       login: "/login",
       callback: "/confirm",
-      include: ["/cabinet"],
+      include: ["/cabinet", "/cabinet/*"],
       saveRedirectToCookie: true,
     },
   },
   runtimeConfig: {
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY,
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || "http://localhost:3000",
     },
   },
   compatibilityDate: "2024-11-01",
   devtools: { enabled: true },
-});
+})

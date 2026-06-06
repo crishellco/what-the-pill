@@ -11,13 +11,7 @@ async function signOut() {
 </script>
 
 <template>
-  <div v-if="user" class="flex items-center gap-2">
-    <img
-      v-if="user.user_metadata?.avatar_url"
-      :src="user.user_metadata.avatar_url"
-      :alt="user.user_metadata.full_name || 'Account'"
-      class="w-7 h-7 rounded-full"
-    />
+  <UTooltip v-if="user" text="Sign out of your account on this device">
     <UButton
       size="xs"
       color="neutral"
@@ -26,14 +20,18 @@ async function signOut() {
     >
       Sign out
     </UButton>
-  </div>
-  <UButton
+  </UTooltip>
+  <UTooltip
     v-else
-    to="/login"
-    size="xs"
-    color="neutral"
-    variant="ghost"
+    text="Sign in with email to save pills and sync your cabinet across devices"
   >
-    Sign in
-  </UButton>
+    <UButton
+      to="/login"
+      size="xs"
+      color="neutral"
+      variant="ghost"
+    >
+      Sign in
+    </UButton>
+  </UTooltip>
 </template>

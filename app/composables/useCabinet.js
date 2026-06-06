@@ -1,6 +1,39 @@
 import { useSupabaseClient, useSupabaseUser, useSupabaseCookieRedirect, useState, navigateTo, useRoute } from '#imports'
+import { normalizePill, dedupeCabinet, mergePills, findCabinetPill } from '#shared/pillIdentity'
 
 const LOCAL_KEY = 'wtp-cabinet'
+
+function getUserId(user) {
+  return user?.sub ?? user?.id ?? null
+}
+
+let inflightFetch = null
+
+async function migrateCabinetIds(supabase, userId, rows) {
+  if (!userId || !rows.length) return
+
+  const stale = rows
+    .map(row => ({ row, pill: normalizePill(row.data) }))
+    .filter(({ row, pill }) => row.pill_id !== pill.id)
+
+  if (!stale.length) return
+
+  for (const { row, pill } of stale) {
+    await supabase
+      .from('saved_pills')
+      .upsert({
+        user_id: userId,
+        pill_id: pill.id,
+        data: pill
+      }, { onConflict: 'user_id,pill_id' })
+
+    await supabase
+      .from('saved_pills')
+      .delete()
+      .eq('user_id', userId)
+      .eq('pill_id', row.pill_id)
+  }
+}
 
 export function useCabinet() {
   const supabase = useSupabaseClient()
@@ -8,27 +41,49 @@ export function useCabinet() {
   const cabinet = useState('cabinet', () => [])
   const loading = useState('cabinet-loading', () => false)
   const ready = useState('cabinet-ready', () => false)
+  const loadedForUser = useState('cabinet-loaded-for-user', () => null)
+  const watcherStarted = useState('cabinet-watcher-started', () => false)
+  const savingId = useState('cabinet-saving-id', () => null)
+  const removingId = useState('cabinet-removing-id', () => null)
 
   async function fetchCabinet() {
-    if (!user.value) {
+    const userId = getUserId(user.value)
+    if (!userId) {
       cabinet.value = []
       ready.value = true
+      loadedForUser.value = null
+      return
+    }
+
+    if (loadedForUser.value === userId && ready.value) return
+
+    if (inflightFetch) {
+      await inflightFetch
       return
     }
 
     loading.value = true
-    try {
-      const { data, error } = await supabase
-        .from('saved_pills')
-        .select('pill_id, data, created_at')
-        .order('created_at', { ascending: true })
+    inflightFetch = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('saved_pills')
+          .select('pill_id, data, created_at')
+          .order('created_at', { ascending: true })
 
-      if (error) throw error
-      cabinet.value = (data || []).map(row => row.data)
-    } finally {
-      loading.value = false
-      ready.value = true
-    }
+        if (error) throw error
+
+        const rows = data || []
+        cabinet.value = dedupeCabinet(rows.map(row => normalizePill(row.data)))
+        await migrateCabinetIds(supabase, userId, rows)
+        loadedForUser.value = userId
+      } finally {
+        loading.value = false
+        ready.value = true
+        inflightFetch = null
+      }
+    })()
+
+    await inflightFetch
   }
 
   async function migrateLocalStorage() {
@@ -50,11 +105,14 @@ export function useCabinet() {
       return
     }
 
-    const rows = localPills.map(pill => ({
-      user_id: user.value.id,
-      pill_id: pill.id,
-      data: pill
-    }))
+    const rows = localPills.map(pill => {
+      const normalized = normalizePill(pill)
+      return {
+        user_id: getUserId(user.value),
+        pill_id: normalized.id,
+        data: normalized
+      }
+    })
 
     await supabase
       .from('saved_pills')
@@ -63,20 +121,38 @@ export function useCabinet() {
     localStorage.removeItem(LOCAL_KEY)
   }
 
-  if (import.meta.client) {
-    watch(user, async (current, previous) => {
-      ready.value = false
-      if (current?.id) {
-        await migrateLocalStorage()
-        await fetchCabinet()
-      } else if (previous?.id) {
-        cabinet.value = []
-        ready.value = true
-      } else {
-        cabinet.value = []
-        ready.value = true
-      }
-    }, { immediate: true })
+  async function syncCabinet() {
+    const userId = getUserId(user.value)
+    if (!userId) {
+      cabinet.value = []
+      loadedForUser.value = null
+      ready.value = true
+      return
+    }
+    if (loadedForUser.value === userId && ready.value) return
+
+    await migrateLocalStorage()
+    await fetchCabinet()
+  }
+
+  if (import.meta.client && !watcherStarted.value) {
+    watcherStarted.value = true
+    watch(
+      () => getUserId(user.value),
+      (userId, prevId) => {
+        if (userId && userId === prevId && ready.value) return
+        if (userId) {
+          syncCabinet()
+        } else if (prevId) {
+          cabinet.value = []
+          loadedForUser.value = null
+          ready.value = true
+        } else if (!ready.value) {
+          ready.value = true
+        }
+      },
+      { immediate: true }
+    )
   }
 
   async function addToCabinet(pill) {
@@ -87,33 +163,63 @@ export function useCabinet() {
       return
     }
 
-    if (cabinet.value.some(p => p.id === pill.id)) return
+    const normalized = normalizePill(pill)
+    const existing = findCabinetPill(cabinet.value, normalized)
 
-    const { error } = await supabase.from('saved_pills').insert({
-      user_id: user.value.id,
-      pill_id: pill.id,
-      data: pill
-    })
+    if (existing) {
+      const merged = mergePills(existing, normalized)
+      if (JSON.stringify(merged) === JSON.stringify(existing)) return
 
-    if (error) {
-      if (error.code === '23505') return
-      throw error
+      savingId.value = normalized.id
+      try {
+        const { error } = await supabase
+          .from('saved_pills')
+          .update({ data: merged })
+          .eq('pill_id', existing.id)
+
+        if (error) throw error
+        cabinet.value = cabinet.value.map(p => (p.id === existing.id ? merged : p))
+      } finally {
+        savingId.value = null
+      }
+      return
     }
 
-    cabinet.value = [...cabinet.value, pill]
+    savingId.value = normalized.id
+    try {
+      const { error } = await supabase.from('saved_pills').insert({
+        user_id: getUserId(user.value),
+        pill_id: normalized.id,
+        data: normalized
+      })
+
+      if (error) {
+        if (error.code === '23505') return
+        throw error
+      }
+
+      cabinet.value = [...cabinet.value, normalized]
+    } finally {
+      savingId.value = null
+    }
   }
 
   async function removeFromCabinet(id) {
     if (!user.value) return
 
-    const { error } = await supabase
-      .from('saved_pills')
-      .delete()
-      .eq('pill_id', id)
+    removingId.value = id
+    try {
+      const { error } = await supabase
+        .from('saved_pills')
+        .delete()
+        .eq('pill_id', id)
 
-    if (error) throw error
-    cabinet.value = cabinet.value.filter(p => p.id !== id)
+      if (error) throw error
+      cabinet.value = cabinet.value.filter(p => p.id !== id)
+    } finally {
+      removingId.value = null
+    }
   }
 
-  return { cabinet, loading, ready, addToCabinet, removeFromCabinet, fetchCabinet }
+  return { cabinet, loading, ready, savingId, removingId, addToCabinet, removeFromCabinet, fetchCabinet: syncCabinet }
 }

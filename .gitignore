@@ -5,3 +5,4 @@ dist
 .netlify
 .env
 *.local
+supabase/.temp

@@ -12,8 +12,8 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center py-24 text-gray-400 space-y-3">
-    <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin" />
-    <p class="text-sm">Completing sign in…</p>
+  <div class="flex flex-col items-center justify-center py-24 space-y-3">
+    <USkeleton class="h-8 w-8 rounded-full" />
+    <p class="text-sm text-gray-400">Completing sign in…</p>
   </div>
 </template>

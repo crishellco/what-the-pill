@@ -1,58 +1,106 @@
 <script setup>
 import { useSupabaseUser } from '#imports'
+import { isPillInCabinet, findCabinetPill } from '#shared/pillIdentity'
 
-const inputMode = ref('imprint') // 'imprint' | 'describe' | 'photo'
+const inputMode = ref('imprint')
 const imprintQuery = ref('')
 const describeQuery = ref('')
 const photoFile = ref(null)
 const photoPreview = ref(null)
-const loading = ref(false)
-const result = ref(null)
-const error = ref(null)
+const tabLoading = reactive({ imprint: false, describe: false, photo: false })
+const saveError = ref(null)
 
-const fileInput = ref(null)
-
-const tabs = [
-  { key: 'imprint', label: 'Imprint Code', icon: 'i-heroicons-magnifying-glass' },
-  { key: 'describe', label: 'Describe It', icon: 'i-heroicons-chat-bubble-left-ellipsis' },
-  { key: 'photo', label: 'Photo', icon: 'i-heroicons-camera' }
-]
-
-function onFileChange(e) {
-  const file = e.target.files[0]
-  if (!file) return
-  photoFile.value = file
+watch(photoFile, (file) => {
+  if (!file) {
+    photoPreview.value = null
+    return
+  }
   const reader = new FileReader()
   reader.onload = (ev) => { photoPreview.value = ev.target.result }
   reader.readAsDataURL(file)
+})
+
+const tabs = [
+  { label: 'Imprint Code', icon: 'i-heroicons-magnifying-glass', value: 'imprint' },
+  { label: 'Describe It', icon: 'i-heroicons-chat-bubble-left-ellipsis', value: 'describe' },
+  { label: 'Photo', icon: 'i-heroicons-camera', value: 'photo' }
+]
+
+const tabTooltips = {
+  imprint: 'Search by the letters or numbers imprinted on the pill',
+  describe: 'Describe the pill\'s color, shape, size, and markings',
+  photo: 'Take or upload a photo for visual identification'
+}
+
+function emptyTabState() {
+  return { result: null, selectedId: null, error: null }
+}
+
+const tabState = reactive({
+  imprint: emptyTabState(),
+  describe: emptyTabState(),
+  photo: emptyTabState()
+})
+
+const activeState = computed(() => tabState[inputMode.value])
+const loading = computed(() => tabLoading[inputMode.value])
+
+const identifyResult = computed(() => activeState.value.result)
+const error = computed(() => activeState.value.error)
+
+const selectedMatch = computed({
+  get() {
+    const state = activeState.value
+    if (!state.result?.matches?.length) return null
+    if (state.selectedId) {
+      return state.result.matches.find(m => m.id === state.selectedId) || state.result.matches[0]
+    }
+    return state.result.matches[0]
+  },
+  set(match) {
+    tabState[inputMode.value].selectedId = match?.id ?? null
+  }
+})
+
+function clearCurrentTab() {
+  if (inputMode.value === 'imprint') imprintQuery.value = ''
+  if (inputMode.value === 'describe') describeQuery.value = ''
+  if (inputMode.value === 'photo') {
+    photoFile.value = null
+    photoPreview.value = null
+  }
+  Object.assign(tabState[inputMode.value], emptyTabState())
+  saveError.value = null
 }
 
 async function identify() {
-  error.value = null
-  result.value = null
-  loading.value = true
+  const mode = inputMode.value
+  const state = tabState[mode]
+  state.error = null
+  state.result = null
+  state.selectedId = null
+  tabLoading[mode] = true
 
   try {
-    let body
-
+    let res
     if (inputMode.value === 'photo' && photoFile.value) {
       const formData = new FormData()
       formData.append('mode', 'photo')
       formData.append('photo', photoFile.value)
-      const res = await $fetch('/api/identify', { method: 'POST', body: formData })
-      result.value = res
+      res = await $fetch('/api/identify', { method: 'POST', body: formData })
     } else {
       const query = inputMode.value === 'imprint' ? imprintQuery.value : describeQuery.value
-      const res = await $fetch('/api/identify', {
+      res = await $fetch('/api/identify', {
         method: 'POST',
         body: { mode: inputMode.value, query }
       })
-      result.value = res
     }
+    state.result = res
+    state.selectedId = res.matches?.[0]?.id ?? null
   } catch (e) {
-    error.value = e.data?.message || 'Something went wrong. Please try again.'
+    state.error = e.data?.message || 'Something went wrong. Please try again.'
   } finally {
-    loading.value = false
+    tabLoading[mode] = false
   }
 }
 
@@ -63,11 +111,36 @@ function canSubmit() {
   return false
 }
 
-const { cabinet, addToCabinet } = useCabinet()
+const { cabinet, addToCabinet, savingId } = useCabinet()
 const user = useSupabaseUser()
-const alreadyAdded = computed(() =>
-  result.value && cabinet.value.some(p => p.id === result.value.id)
+
+const matches = computed(() => identifyResult.value?.matches || [])
+const uploadedPhoto = computed(() =>
+  identifyResult.value?.uploadedPhoto || (inputMode.value === 'photo' ? photoPreview.value : null)
 )
+
+const savedIds = computed(() => cabinet.value.map(p => p.id))
+
+const alreadyAdded = computed(() =>
+  selectedMatch.value && isPillInCabinet(cabinet.value, selectedMatch.value)
+)
+
+const cabinetMatch = computed(() =>
+  selectedMatch.value ? findCabinetPill(cabinet.value, selectedMatch.value) : null
+)
+
+async function handleAddToCabinet(pill) {
+  saveError.value = null
+  try {
+    const toSave = { ...pill }
+    if (uploadedPhoto.value && !toSave.imageUrl) {
+      toSave.imageUrl = uploadedPhoto.value
+    }
+    await addToCabinet(toSave)
+  } catch (e) {
+    saveError.value = e.message || 'Could not save pill.'
+  }
+}
 </script>
 
 <template>
@@ -77,83 +150,102 @@ const alreadyAdded = computed(() =>
       <p class="text-gray-500 text-sm">Use an imprint code, a photo, or describe what you see</p>
     </div>
 
-    <!-- Input mode tabs -->
-    <div class="flex rounded-xl bg-gray-100 dark:bg-gray-800 p-1 gap-1">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium transition-all"
-        :class="inputMode === tab.key
-          ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-          : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
-        @click="inputMode = tab.key; result = null; error = null"
+    <UCard :ui="{ body: 'space-y-4' }">
+      <UTabs
+        v-model="inputMode"
+        :items="tabs"
+        :content="false"
+        class="w-full"
       >
-        <UIcon :name="tab.icon" class="w-4 h-4" />
-        {{ tab.label }}
-      </button>
-    </div>
+        <template #default="{ item }">
+          <UTooltip :text="tabTooltips[item.value]">
+            <span>{{ item.label }}</span>
+          </UTooltip>
+        </template>
+      </UTabs>
 
-    <!-- Imprint input -->
-    <div v-if="inputMode === 'imprint'" class="space-y-3">
-      <UInput
-        v-model="imprintQuery"
-        placeholder="e.g. L484, M366, 44 438"
-        size="xl"
-        autofocus
-        @keyup.enter="canSubmit() && identify()"
-      />
-      <p class="text-xs text-gray-400">Type the letters or numbers stamped on the pill</p>
-    </div>
-
-    <!-- Describe input -->
-    <div v-if="inputMode === 'describe'" class="space-y-3">
-      <UTextarea
-        v-model="describeQuery"
-        placeholder="e.g. round white pill, scored in half, about the size of an aspirin"
-        :rows="3"
-        autofocus
-      />
-    </div>
-
-    <!-- Photo input -->
-    <div v-if="inputMode === 'photo'" class="space-y-3">
-      <div
-        class="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 text-center cursor-pointer hover:border-primary-400 transition-colors"
-        @click="fileInput.click()"
+      <UFormField
+        v-if="inputMode === 'imprint'"
+        label="Imprint code"
+        help="Type the letters or numbers stamped on the pill"
       >
-        <template v-if="photoPreview">
-          <img :src="photoPreview" class="max-h-48 mx-auto rounded-lg object-contain" />
-          <p class="text-xs text-gray-400 mt-2">Tap to change</p>
-        </template>
-        <template v-else>
-          <UIcon name="i-heroicons-camera" class="w-10 h-10 text-gray-400 mx-auto mb-2" />
-          <p class="text-sm text-gray-500">Tap to take a photo or upload</p>
-          <p class="text-xs text-gray-400 mt-1">JPG, PNG up to 10MB</p>
-        </template>
-      </div>
-      <input ref="fileInput" type="file" accept="image/*" capture="environment" class="hidden" @change="onFileChange" />
-    </div>
+        <UInput
+          v-model="imprintQuery"
+          placeholder="e.g. L484, M366, 44 438"
+          size="xl"
+          class="w-full"
+          :ui="{ root: 'w-full' }"
+          autofocus
+          @keyup.enter="canSubmit() && identify()"
+        />
+      </UFormField>
 
-    <UButton
-      block
-      size="xl"
-      :loading="loading"
-      :disabled="!canSubmit()"
-      @click="identify"
-    >
-      Identify Pill
-    </UButton>
+      <UFormField
+        v-if="inputMode === 'describe'"
+        label="Description"
+        help="Color, shape, size, markings — anything you notice"
+      >
+        <UTextarea
+          v-model="describeQuery"
+          placeholder="e.g. round white pill, scored in half, about the size of an aspirin"
+          :rows="4"
+          class="w-full resize-none"
+          :ui="{ root: 'w-full' }"
+          autofocus
+        />
+      </UFormField>
 
-    <!-- Error -->
+      <UFormField
+        v-if="inputMode === 'photo'"
+        label="Photo"
+        help="JPG, PNG up to 10MB"
+      >
+        <UFileUpload
+          v-model="photoFile"
+          accept="image/*"
+          capture="environment"
+          label="Tap to take a photo or upload"
+          class="w-full"
+        />
+      </UFormField>
+
+      <UTooltip text="Look up your pill using AI and public drug databases">
+        <span class="block">
+          <UButton
+            block
+            size="xl"
+            :loading="loading"
+            :disabled="!canSubmit()"
+            @click="identify"
+          >
+            Identify Pill
+          </UButton>
+        </span>
+      </UTooltip>
+    </UCard>
+
     <UAlert v-if="error" color="error" :description="error" />
+    <UAlert v-if="saveError" color="error" :description="saveError" />
 
-    <!-- Result -->
-    <PillResult
-      v-if="result"
-      :result="result"
-      :already-added="alreadyAdded"
-      :signed-in="!!user"
-      @add="addToCabinet(result)"
-    />
+    <template v-if="matches.length">
+      <PillMatchList
+        :matches="matches"
+        :selected-id="selectedMatch?.id"
+        :uploaded-photo="uploadedPhoto"
+        :saved-ids="savedIds"
+        @select="selectedMatch = $event"
+        @clear="clearCurrentTab"
+      />
+
+      <PillResult
+        v-if="selectedMatch"
+        :result="selectedMatch"
+        :already-added="alreadyAdded"
+        :signed-in="!!user"
+        :uploaded-photo="uploadedPhoto"
+        :adding="savingId === (cabinetMatch?.id ?? selectedMatch.id)"
+        @add="handleAddToCabinet(selectedMatch)"
+      />
+    </template>
   </div>
 </template>
