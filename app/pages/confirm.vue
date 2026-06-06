@@ -1,4 +1,6 @@
 <script setup>
+import { useSupabaseUser, useSupabaseCookieRedirect } from '#imports'
+
 const user = useSupabaseUser()
 const redirect = useSupabaseCookieRedirect()
 

@@ -1,4 +1,6 @@
 <script setup>
+import { useSupabaseUser, useSupabaseClient } from '#imports'
+
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
 

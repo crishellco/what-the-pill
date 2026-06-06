@@ -1,4 +1,6 @@
 <script setup>
+import { useSupabaseClient, useSupabaseUser } from '#imports'
+
 definePageMeta({ layout: 'default' })
 
 const supabase = useSupabaseClient()

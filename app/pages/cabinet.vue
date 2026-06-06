@@ -1,4 +1,6 @@
 <script setup>
+import { useSupabaseUser } from '#imports'
+
 const { cabinet, removeFromCabinet, loading: cabinetLoading, ready } = useCabinet()
 const user = useSupabaseUser()
 

@@ -15,6 +15,8 @@ export default defineNuxtConfig({
     },
   },
   supabase: {
+    url: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+    key: process.env.NUXT_PUBLIC_SUPABASE_KEY || process.env.SUPABASE_KEY,
     redirect: true,
     redirectOptions: {
       login: "/login",
@@ -27,8 +29,6 @@ export default defineNuxtConfig({
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || "http://localhost:3000",
-      supabaseUrl: process.env.SUPABASE_URL,
-      supabaseKey: process.env.SUPABASE_KEY,
     },
   },
   compatibilityDate: "2024-11-01",

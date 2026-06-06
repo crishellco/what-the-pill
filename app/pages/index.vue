@@ -1,4 +1,6 @@
 <script setup>
+import { useSupabaseUser } from '#imports'
+
 const inputMode = ref('imprint') // 'imprint' | 'describe' | 'photo'
 const imprintQuery = ref('')
 const describeQuery = ref('')
