@@ -5,6 +5,7 @@ const props = defineProps({
   matches: { type: Array, required: true },
   selectedId: { type: String, default: null },
   uploadedPhoto: { type: String, default: null },
+  uploadedPhotoSide2: { type: String, default: null },
   savedIds: { type: Array, default: () => [] }
 })
 defineEmits(['select', 'clear'])
@@ -63,11 +64,19 @@ function matchClasses(match) {
           :class="matchClasses(match)"
           @click="$emit('select', match)"
         >
-        <PillImage
-          :pill="match"
-          :uploaded-photo="uploadedPhoto && match.id === matches[0]?.id ? uploadedPhoto : null"
-          size="md"
-        />
+        <div class="flex gap-1.5 shrink-0" @click.stop>
+          <PillImage
+            :pill="match"
+            :uploaded-photo="uploadedPhoto && match.id === matches[0]?.id ? uploadedPhoto : null"
+            size="md"
+          />
+          <PillImage
+            v-if="uploadedPhotoSide2 && match.id === matches[0]?.id"
+            :pill="match"
+            :uploaded-photo="uploadedPhotoSide2"
+            size="md"
+          />
+        </div>
         <div class="flex-1 min-w-0 space-y-0.5">
           <div class="flex items-start justify-between gap-2">
             <p class="font-semibold text-gray-900 dark:text-white min-w-0 break-words leading-snug">

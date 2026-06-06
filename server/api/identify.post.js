@@ -1,141 +1,189 @@
-import Anthropic from '@anthropic-ai/sdk'
+/**
+ * Pill identification endpoint — all modes use Gemini.
+ *
+ * Pipeline:
+ *   imprint  → Gemini text
+ *   describe → Gemini text
+ *   photo    → Gemini vision
+ */
 import { normalizeResponse } from '../utils/pillNormalize.js'
 import { dedupeCabinet, normalizePill } from '#shared/pillIdentity'
 import { getCacheKey, getCachedIdentifyResult, setCachedIdentifyResult } from '../utils/identifyCache.js'
 import { loadPharmaTerms, discoverAndSaveTerms } from '../utils/pharmaTerms.js'
+import { identifyFromTextWithGemini, identifyPillImagesWithGemini } from '../utils/geminiVision.js'
 
-const SYSTEM_PROMPT = `You are a pill identification assistant. Given an imprint code, description, or image, identify likely medications and return a structured JSON response. Be accurate and clear. Never diagnose — only identify and inform.
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
-Return the top 3 to 5 most likely matches, sorted by confidence (highest first).
+async function readPhotoFromForm(form, fieldName) {
+  const file = form.get(fieldName)
+  if (!file || typeof file === 'string') return null
 
-IMPORTANT consistency rules:
-- Use the same identity for the same physical pill regardless of how it was searched.
-- When an imprint is known, "id" MUST be "imprint-{imprint with only letters and numbers, lowercase}" (example: imprint "G 035" -> "imprint-g035").
-- "name" should be the generic ingredient-based label with strength when known (example: "Hydrocodone / Acetaminophen 7.5mg/325mg"), not a brand name alone.
-- Put common brand names in "genericName" (example: "Also known as: Vicodin, Norco").
-- "ingredients" must list active ingredients only, normalized and comma-separated (example: "hydrocodone, acetaminophen").
-- If two matches are the same drug product, do not return duplicates.
+  const mime = file.type || 'image/jpeg'
+  if (!mime.startsWith('image/')) {
+    throw createError({ statusCode: 400, message: 'Upload must be an image file.' })
+  }
 
-Always respond with this exact JSON structure:
-{
-  "matches": [
-    {
-      "id": "<imprint-{normalized imprint} when imprint known, else rx-{sorted-ingredient-slugs}>",
-      "name": "<generic ingredient label with strength when known>",
-      "genericName": "<brand names or alternate names, if any>",
-      "ingredients": "<active ingredient(s), lowercase, comma-separated>",
-      "confidence": <0-100 integer>,
-      "physical": {
-        "shape": "<round|oval|capsule|oblong|etc>",
-        "color": "<color>",
-        "imprint": "<imprint if known>",
-        "size": "<approximate size>"
-      },
-      "summary": "<2-3 plain English sentences>",
-      "uses": "<what it's commonly taken for>",
-      "dosage": "<typical dosage range>",
-      "safetyLevel": "<low|moderate|high>",
-      "safetyNote": "<one plain English sentence for 'should I be worried?'>",
-      "sources": [
-        { "name": "OpenFDA", "found": true/false },
-        { "name": "DailyMed", "found": true/false },
-        { "name": "RxNav", "found": true/false }
-      ]
-    }
-  ]
+  const buffer = await file.arrayBuffer()
+  if (buffer.byteLength > MAX_PHOTO_BYTES) {
+    throw createError({ statusCode: 400, message: 'Each photo must be 10MB or smaller.' })
+  }
+
+  const base64 = Buffer.from(buffer).toString('base64')
+
+  return { base64, mime, dataUrl: `data:${mime};base64,${base64}` }
 }
 
-If you cannot identify the pill with any confidence, return one match with confidence 0 and explain in summary.`
+function dataUrlToImage(dataUrl) {
+  if (!dataUrl?.startsWith('data:')) return null
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+  if (!match) return null
+  return { mime: match[1], base64: match[2], dataUrl }
+}
+
+async function finalizeResult(matches, { uploadedPhoto, uploadedPhotoSide2, photoDescription, matchSource }) {
+  let result = normalizeResponse({ matches }, uploadedPhoto, uploadedPhotoSide2)
+
+  if (photoDescription) result.photoDescription = photoDescription
+  if (matchSource) result.matchSource = matchSource
+
+  const termsAdded = await discoverAndSaveTerms(result.matches)
+  if (termsAdded) {
+    result = {
+      ...result,
+      matches: dedupeCabinet(result.matches.map((match) => normalizePill(match)))
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0)),
+    }
+  }
+
+  return result
+}
+
+function noMatchResult(query, mode) {
+  const summary = mode === 'photo'
+    ? 'Could not identify this pill from the photo. Try a clearer image with good lighting, or search by imprint code.'
+    : `Could not identify any pills matching "${query}". Try a different search or upload a photo.`
+
+  return [{
+    id: 'unknown',
+    name: 'No match found',
+    genericName: '',
+    ingredients: '',
+    confidence: 0,
+    matchSource: 'gemini',
+    physical: { shape: '', color: '', imprint: mode === 'imprint' ? query : '', size: '' },
+    summary,
+    uses: '',
+    dosage: '',
+    safetyLevel: 'moderate',
+    safetyNote: 'Unable to identify this pill. Do not take unidentified medication — consult a pharmacist or doctor.',
+    sources: [
+      { name: 'OpenFDA', found: false },
+      { name: 'DailyMed', found: false },
+      { name: 'RxNav', found: false },
+    ],
+  }]
+}
+
+async function handleGeminiResult(geminiResult, { mode, query, uploadedPhoto, uploadedPhotoSide2 }) {
+  const photoDescription = geminiResult?.photoDescription || null
+  const matches = geminiResult?.matches?.length
+    ? geminiResult.matches
+    : noMatchResult(query || photoDescription || mode, mode)
+
+  return finalizeResult(matches, {
+    uploadedPhoto,
+    uploadedPhotoSide2,
+    photoDescription,
+    matchSource: 'gemini',
+  })
+}
 
 export default defineEventHandler(async (event) => {
   await loadPharmaTerms()
-
   const config = useRuntimeConfig()
-  const client = new Anthropic({ apiKey: config.anthropicApiKey })
 
-  let mode, query, imageBase64, imageMime, uploadedPhoto
+  let mode, query, body
+  let uploadedPhoto, uploadedPhotoSide2
+  const photoImages = []
 
   const contentType = getRequestHeader(event, 'content-type') || ''
 
   if (contentType.includes('multipart/form-data')) {
     const form = await readFormData(event)
     mode = form.get('mode')
-    const file = form.get('photo')
-    if (file) {
-      const buffer = await file.arrayBuffer()
-      imageBase64 = Buffer.from(buffer).toString('base64')
-      imageMime = file.type || 'image/jpeg'
-      uploadedPhoto = `data:${imageMime};base64,${imageBase64}`
+
+    const side1 = await readPhotoFromForm(form, 'photo')
+    const side2 = await readPhotoFromForm(form, 'photoSide2')
+
+    if (side1) {
+      photoImages.push(side1)
+      uploadedPhoto = side1.dataUrl
+    }
+    if (side2) {
+      photoImages.push(side2)
+      uploadedPhotoSide2 = side2.dataUrl
     }
   } else {
-    const body = await readBody(event)
+    body = await readBody(event)
     mode = body.mode
     query = body.query
+
+    if (mode === 'photo') {
+      uploadedPhoto = body.uploadedPhoto ?? null
+      uploadedPhotoSide2 = body.uploadedPhotoSide2 ?? null
+      const img1 = dataUrlToImage(uploadedPhoto)
+      const img2 = dataUrlToImage(uploadedPhotoSide2)
+      if (img1) photoImages.push(img1)
+      if (img2) photoImages.push(img2)
+    }
   }
 
-  let userContent
+  if (mode === 'photo') {
+    if (!photoImages.length) {
+      throw createError({ statusCode: 400, message: 'At least one pill photo is required.' })
+    }
 
-  if (mode === 'photo' && imageBase64) {
-    userContent = [
-      {
-        type: 'image',
-        source: { type: 'base64', media_type: imageMime, data: imageBase64 }
-      },
-      {
-        type: 'text',
-        text: 'Identify this pill from the photo. Return the top 3-5 most likely matches with imprint, shape, and color for each.'
-      }
-    ]
-  } else if (mode === 'imprint') {
-    userContent = `Identify pills with imprint code "${query}". Return the top 3-5 most likely matches from OpenFDA, DailyMed, and RxNav data.`
-  } else {
-    userContent = `Identify pills matching this description: "${query}". Return the top 3-5 most likely matches.`
+    try {
+      const geminiResult = await identifyPillImagesWithGemini(photoImages, config)
+      return handleGeminiResult(geminiResult, {
+        mode: 'photo',
+        uploadedPhoto,
+        uploadedPhotoSide2,
+      })
+    } catch (err) {
+      console.error('[identify:photo] Gemini error:', err.message)
+      throw createError({
+        statusCode: 502,
+        message: 'Could not analyze the pill photo. Please try again or use imprint search.',
+      })
+    }
+  }
+
+  if (!query?.trim()) {
+    throw createError({ statusCode: 400, message: 'Search query is required.' })
   }
 
   const cacheKey = getCacheKey(mode, query)
   if (cacheKey) {
     const cached = await getCachedIdentifyResult(cacheKey)
-    if (cached) {
-      return {
-        ...cached,
-        uploadedPhoto: uploadedPhoto || cached.uploadedPhoto || null
-      }
-    }
+    if (cached) return cached
   }
 
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userContent }]
-  })
-
-  const text = message.content[0].text
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw createError({ statusCode: 500, message: 'Could not parse identification result.' })
+  let geminiResult
+  try {
+    geminiResult = await identifyFromTextWithGemini(mode, query, config)
+  } catch (err) {
+    console.error(`[identify:${mode}] Gemini error:`, err.message)
+    throw createError({
+      statusCode: 502,
+      message: 'Could not identify the pill. Please try again.',
+    })
   }
 
-  let result = normalizeResponse(JSON.parse(jsonMatch[0]), uploadedPhoto)
-
-  const termsAdded = await discoverAndSaveTerms(result.matches)
-  if (termsAdded) {
-    result = {
-      ...result,
-      matches: dedupeCabinet(result.matches.map(match => normalizePill(match)))
-        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-    }
-  }
+  const result = await handleGeminiResult(geminiResult, { mode, query })
 
   if (cacheKey) {
     await setCachedIdentifyResult(cacheKey, mode, result)
-  }
-
-  if (mode === 'photo' && result.matches[0]?.physical?.imprint) {
-    const imprintKey = getCacheKey('imprint', result.matches[0].physical.imprint)
-    if (imprintKey) {
-      await setCachedIdentifyResult(imprintKey, 'imprint', result)
-    }
   }
 
   return result

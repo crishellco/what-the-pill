@@ -204,6 +204,10 @@ export function getCanonicalPillId(pill) {
   const imprint = normalizeImprint(pill.physical?.imprint)
   if (imprint) return `imprint-${imprint}`
 
+  // NDC / RxCUI from LLM results when imprint is unknown
+  if (pill.ndc) return `ndc-${String(pill.ndc).replace(/[^a-z0-9]/gi, '')}`
+  if (pill.rxcui) return `rxcui-${pill.rxcui}`
+
   const keys = [...new Set(parseIngredientKeys(...ingredientSources(pill)))].sort()
   if (keys.length) return `rx-${keys.join('-')}`
 
@@ -294,6 +298,7 @@ export function mergePills(existing, incoming) {
     name: preferNonBrandName(incoming.name, existing.name),
     genericName: [existing.genericName, incoming.genericName, existing.name, incoming.name].filter(Boolean).join(' '),
     imageUrl: incoming.imageUrl || existing.imageUrl,
+    imageUrlSide2: incoming.imageUrlSide2 || existing.imageUrlSide2,
     confidence: Math.max(existing.confidence || 0, incoming.confidence || 0),
     summary: longer(existing.summary, incoming.summary),
     uses: longer(existing.uses, incoming.uses),

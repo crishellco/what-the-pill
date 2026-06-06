@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { getAnthropicModels, logAnthropicResponse } from '../utils/anthropicModels.js'
 
 const SYSTEM_PROMPT = `You are a drug interaction checker. Given a list of medications, identify known interactions between them. Respond with this exact JSON structure:
 
@@ -24,9 +25,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const client = new Anthropic({ apiKey: config.anthropicApiKey })
+  const { model } = getAnthropicModels(config)
 
   const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model,
     max_tokens: 1024,
     system: SYSTEM_PROMPT,
     messages: [{
@@ -34,6 +36,8 @@ export default defineEventHandler(async (event) => {
       content: `Check interactions between these medications: ${pills.join(', ')}`
     }]
   })
+
+  logAnthropicResponse('interact', message)
 
   const text = message.content[0].text
   const jsonMatch = text.match(/\{[\s\S]*\}/)

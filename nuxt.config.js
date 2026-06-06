@@ -38,7 +38,11 @@ export default defineNuxtConfig({
     },
   },
   runtimeConfig: {
+    geminiApiKey: process.env.GEMINI_API_KEY,
+    geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    // Optional — interaction checks only (identification uses Gemini)
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
     supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY,
     public: {
       siteUrl:

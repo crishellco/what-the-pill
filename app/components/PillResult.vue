@@ -5,11 +5,16 @@ const props = defineProps({
   signedIn: { type: Boolean, default: false },
   showAdd: { type: Boolean, default: true },
   uploadedPhoto: { type: String, default: null },
+  uploadedPhotoSide2: { type: String, default: null },
   adding: { type: Boolean, default: false }
 })
 defineEmits(['add'])
 
 const cabinetPath = computed(() => `/cabinet/${encodeURIComponent(props.result.id)}`)
+const side2Photo = computed(() => props.uploadedPhotoSide2 || props.result.imageUrlSide2 || null)
+const physicalEntries = computed(() =>
+  Object.entries(props.result.physical || {}).filter(([, val]) => val)
+)
 
 const confidenceColor = (score) => {
   if (score >= 80) return 'text-green-600 dark:text-green-400'
@@ -45,7 +50,15 @@ const safetyAlertColor = computed(() => {
 
       <div class="p-4 sm:p-5">
         <div class="flex items-start gap-3 sm:gap-4 min-w-0">
-          <PillImage :pill="result" :uploaded-photo="uploadedPhoto" size="lg" />
+          <div class="flex gap-2 shrink-0">
+            <PillImage :pill="result" :uploaded-photo="uploadedPhoto" size="lg" />
+            <PillImage
+              v-if="side2Photo"
+              :pill="result"
+              :uploaded-photo="side2Photo"
+              size="lg"
+            />
+          </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0 flex-1">
@@ -65,9 +78,9 @@ const safetyAlertColor = computed(() => {
                 <p class="text-xs text-gray-400" aria-hidden="true">confidence</p>
               </div>
             </div>
-            <div v-if="result.physical" class="flex flex-wrap gap-1.5 mt-3">
+            <div v-if="physicalEntries.length" class="flex flex-wrap gap-1.5 mt-3">
               <UBadge
-                v-for="(val, key) in result.physical"
+                v-for="[key, val] in physicalEntries"
                 :key="key"
                 color="neutral"
                 variant="subtle"

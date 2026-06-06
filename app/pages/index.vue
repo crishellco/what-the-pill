@@ -11,31 +11,43 @@ useSiteSeo({
 const inputMode = ref('imprint')
 const imprintQuery = ref('')
 const describeQuery = ref('')
-const photoFile = ref(null)
-const photoPreview = ref(null)
+const photoSide1 = ref(null)
+const photoSide2 = ref(null)
+const photoPreviewSide1 = ref(null)
+const photoPreviewSide2 = ref(null)
 const tabLoading = reactive({ imprint: false, describe: false, photo: false })
 const saveError = ref(null)
 
-watch(photoFile, (file) => {
+function readPhotoPreview(file, previewRef) {
   if (!file) {
-    photoPreview.value = null
+    previewRef.value = null
     return
   }
   const reader = new FileReader()
-  reader.onload = (ev) => { photoPreview.value = ev.target.result }
+  reader.onload = (ev) => { previewRef.value = ev.target.result }
   reader.readAsDataURL(file)
-})
+}
+
+watch(photoSide1, (file) => readPhotoPreview(file, photoPreviewSide1))
+watch(photoSide2, (file) => readPhotoPreview(file, photoPreviewSide2))
 
 const tabs = [
-  { label: 'Imprint Code', icon: 'i-heroicons-magnifying-glass', value: 'imprint' },
-  { label: 'Describe It', icon: 'i-heroicons-chat-bubble-left-ellipsis', value: 'describe' },
-  { label: 'Photo', icon: 'i-heroicons-camera', value: 'photo' }
+  { label: 'Imprint Code', icon: 'i-lucide-stamp', value: 'imprint' },
+  { label: 'Describe It', icon: 'i-heroicons-magnifying-glass', value: 'describe' },
+  { label: 'Photo', icon: 'i-heroicons-camera', value: 'photo' },
 ]
 
 const tabTooltips = {
   imprint: 'Search by the letters or numbers imprinted on the pill',
   describe: 'Describe the pill\'s color, shape, size, and markings',
-  photo: 'Take or upload a photo for visual identification'
+  photo: 'Take or upload a photo of each side of the pill for best results'
+}
+
+const photoUploadUi = {
+  root: 'w-full',
+  base: 'aspect-[4/5] w-full relative rounded-lg',
+  fileLeadingAvatar: 'size-full rounded-lg object-contain bg-white dark:bg-gray-950',
+  fileTrailingButton: 'absolute top-2 end-2 z-10 p-0 rounded-full border-2 border-bg shadow-sm'
 }
 
 function emptyTabState() {
@@ -72,8 +84,10 @@ function clearCurrentTab() {
   if (inputMode.value === 'imprint') imprintQuery.value = ''
   if (inputMode.value === 'describe') describeQuery.value = ''
   if (inputMode.value === 'photo') {
-    photoFile.value = null
-    photoPreview.value = null
+    photoSide1.value = null
+    photoSide2.value = null
+    photoPreviewSide1.value = null
+    photoPreviewSide2.value = null
   }
   Object.assign(tabState[inputMode.value], emptyTabState())
   saveError.value = null
@@ -89,10 +103,11 @@ async function identify() {
 
   try {
     let res
-    if (inputMode.value === 'photo' && photoFile.value) {
+    if (inputMode.value === 'photo' && (photoSide1.value || photoSide2.value)) {
       const formData = new FormData()
       formData.append('mode', 'photo')
-      formData.append('photo', photoFile.value)
+      if (photoSide1.value) formData.append('photo', photoSide1.value)
+      if (photoSide2.value) formData.append('photoSide2', photoSide2.value)
       res = await $fetch('/api/identify', { method: 'POST', body: formData })
     } else {
       const query = inputMode.value === 'imprint' ? imprintQuery.value : describeQuery.value
@@ -113,7 +128,7 @@ async function identify() {
 function canSubmit() {
   if (inputMode.value === 'imprint') return imprintQuery.value.trim().length > 0
   if (inputMode.value === 'describe') return describeQuery.value.trim().length > 0
-  if (inputMode.value === 'photo') return !!photoFile.value
+  if (inputMode.value === 'photo') return !!(photoSide1.value || photoSide2.value)
   return false
 }
 
@@ -121,8 +136,12 @@ const { cabinet, addToCabinet, savingId } = useCabinet()
 const user = useSupabaseUser()
 
 const matches = computed(() => identifyResult.value?.matches || [])
+const photoDescription = computed(() => identifyResult.value?.photoDescription || null)
 const uploadedPhoto = computed(() =>
-  identifyResult.value?.uploadedPhoto || (inputMode.value === 'photo' ? photoPreview.value : null)
+  identifyResult.value?.uploadedPhoto || (inputMode.value === 'photo' ? photoPreviewSide1.value : null)
+)
+const uploadedPhotoSide2 = computed(() =>
+  identifyResult.value?.uploadedPhotoSide2 || (inputMode.value === 'photo' ? photoPreviewSide2.value : null)
 )
 
 const savedIds = computed(() => cabinet.value.map(p => p.id))
@@ -142,6 +161,9 @@ async function handleAddToCabinet(pill) {
     if (uploadedPhoto.value && !toSave.imageUrl) {
       toSave.imageUrl = uploadedPhoto.value
     }
+    if (uploadedPhotoSide2.value && !toSave.imageUrlSide2) {
+      toSave.imageUrlSide2 = uploadedPhotoSide2.value
+    }
     await addToCabinet(toSave)
   } catch (e) {
     saveError.value = e.message || 'Could not save pill.'
@@ -153,7 +175,7 @@ async function handleAddToCabinet(pill) {
   <div class="space-y-6">
     <div class="text-center space-y-1">
       <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Identify a Pill</h1>
-      <p class="text-gray-500 text-sm">Use an imprint code, a photo, or describe what you see</p>
+      <p class="text-gray-500 text-sm">Use an imprint code, photos of each side, or describe what you see</p>
     </div>
 
     <UCard :ui="{ body: 'space-y-4' }">
@@ -163,11 +185,22 @@ async function handleAddToCabinet(pill) {
         :content="false"
         class="w-full"
         aria-label="Pill identification method"
+        :ui="{
+          list: 'grid grid-cols-3 w-full',
+          trigger: 'flex items-center justify-center gap-0 sm:gap-2 leading-none px-2 sm:px-4 py-2.5 min-h-10',
+          leadingIcon: 'size-5 shrink-0 leading-none',
+          label: 'hidden sm:inline truncate leading-none',
+        }"
       >
-        <template #default="{ item }">
+        <template #leading="{ item }">
           <UTooltip :text="tabTooltips[item.value]">
-            <span>{{ item.label }}</span>
+            <span class="inline-flex items-center leading-none">
+              <UIcon :name="item.icon" class="size-5 shrink-0 leading-none" aria-hidden="true" />
+            </span>
           </UTooltip>
+        </template>
+        <template #default="{ item }">
+          <span class="leading-none">{{ item.label }}</span>
         </template>
       </UTabs>
 
@@ -202,21 +235,42 @@ async function handleAddToCabinet(pill) {
         />
       </UFormField>
 
-      <UFormField
-        v-if="inputMode === 'photo'"
-        label="Photo"
-        help="JPG, PNG up to 10MB"
-      >
-        <UFileUpload
-          v-model="photoFile"
-          accept="image/*"
-          capture="environment"
-          label="Upload a photo or take one with your camera"
-          class="w-full"
-        />
-      </UFormField>
+      <div v-if="inputMode === 'photo'" class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <UFormField
+          label="Side 1"
+          help="JPG or PNG, up to 10MB"
+          class="min-w-0"
+        >
+          <UFileUpload
+            v-model="photoSide1"
+            layout="grid"
+            position="inside"
+            accept="image/*"
+            capture="environment"
+            label="Upload or photograph one side"
+            class="w-full"
+            :ui="photoUploadUi"
+          />
+        </UFormField>
+        <UFormField
+          label="Side 2"
+          help="Optional — helps read both sides of the pill"
+          class="min-w-0"
+        >
+          <UFileUpload
+            v-model="photoSide2"
+            layout="grid"
+            position="inside"
+            accept="image/*"
+            capture="environment"
+            label="Upload or photograph the other side"
+            class="w-full"
+            :ui="photoUploadUi"
+          />
+        </UFormField>
+      </div>
 
-      <UTooltip text="Look up your pill using AI and public drug databases">
+      <UTooltip text="Search the pill reference database by imprint, description, or photo">
         <span class="block">
           <UButton
             block
@@ -237,10 +291,20 @@ async function handleAddToCabinet(pill) {
     </div>
 
     <template v-if="matches.length">
+      <UAlert
+        v-if="photoDescription && inputMode === 'photo'"
+        color="neutral"
+        variant="subtle"
+        icon="i-heroicons-eye"
+        title="Read from your photos"
+        :description="photoDescription"
+      />
+
       <PillMatchList
         :matches="matches"
         :selected-id="selectedMatch?.id"
         :uploaded-photo="uploadedPhoto"
+        :uploaded-photo-side2="uploadedPhotoSide2"
         :saved-ids="savedIds"
         @select="selectedMatch = $event"
         @clear="clearCurrentTab"
@@ -252,6 +316,7 @@ async function handleAddToCabinet(pill) {
         :already-added="alreadyAdded"
         :signed-in="!!user"
         :uploaded-photo="uploadedPhoto"
+        :uploaded-photo-side2="uploadedPhotoSide2"
         :adding="savingId === (cabinetMatch?.id ?? selectedMatch.id)"
         @add="handleAddToCabinet(selectedMatch)"
       />
