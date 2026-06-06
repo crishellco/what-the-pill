@@ -1,5 +1,6 @@
 <script setup>
-const { cabinet, removeFromCabinet } = useCabinet()
+const { cabinet, removeFromCabinet, loading: cabinetLoading, ready } = useCabinet()
+const user = useSupabaseUser()
 
 const loading = ref(false)
 const interactions = ref(null)
@@ -31,9 +32,15 @@ async function checkInteractions() {
       <UBadge v-if="cabinet.length" :label="`${cabinet.length} pill${cabinet.length > 1 ? 's' : ''}`" />
     </div>
 
-    <div v-if="cabinet.length === 0" class="text-center py-16 text-gray-400 space-y-2">
+    <div v-if="!ready || cabinetLoading" class="text-center py-16 text-gray-400 space-y-2">
+      <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 mx-auto animate-spin" />
+      <p class="text-sm">Loading your pills…</p>
+    </div>
+
+    <div v-else-if="cabinet.length === 0" class="text-center py-16 text-gray-400 space-y-2">
       <UIcon name="i-heroicons-archive-box" class="w-12 h-12 mx-auto" />
       <p class="text-sm">No pills saved yet. Identify a pill and tap "Add to My Pills".</p>
+      <p v-if="user" class="text-xs">Signed in as {{ user.email }}</p>
     </div>
 
     <div v-else class="space-y-3">

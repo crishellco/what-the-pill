@@ -1,7 +1,8 @@
 <script setup>
 defineProps({
   result: { type: Object, required: true },
-  alreadyAdded: { type: Boolean, default: false }
+  alreadyAdded: { type: Boolean, default: false },
+  signedIn: { type: Boolean, default: false }
 })
 defineEmits(['add'])
 
@@ -94,8 +95,11 @@ const confidenceColor = (score) => {
         :icon="alreadyAdded ? 'i-heroicons-check' : 'i-heroicons-plus'"
         @click="$emit('add')"
       >
-        {{ alreadyAdded ? 'Added to My Pills' : 'Add to My Pills' }}
+        {{ alreadyAdded ? 'Added to My Pills' : signedIn ? 'Add to My Pills' : 'Sign in to save' }}
       </UButton>
+      <p v-if="!signedIn && !alreadyAdded" class="text-xs text-center text-gray-400 mt-2">
+        Google sign-in required to save pills
+      </p>
     </div>
   </div>
 </template>

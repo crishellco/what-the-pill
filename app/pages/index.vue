@@ -62,6 +62,7 @@ function canSubmit() {
 }
 
 const { cabinet, addToCabinet } = useCabinet()
+const user = useSupabaseUser()
 const alreadyAdded = computed(() =>
   result.value && cabinet.value.some(p => p.id === result.value.id)
 )
@@ -149,6 +150,7 @@ const alreadyAdded = computed(() =>
       v-if="result"
       :result="result"
       :already-added="alreadyAdded"
+      :signed-in="!!user"
       @add="addToCabinet(result)"
     />
   </div>

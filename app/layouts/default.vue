@@ -6,9 +6,12 @@
           <span class="text-2xl">💊</span>
           <span class="font-bold text-lg text-gray-900 dark:text-white">What The Pill</span>
         </NuxtLink>
-        <NuxtLink to="/cabinet" class="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
-          My Pills
-        </NuxtLink>
+        <div class="flex items-center gap-3">
+          <NuxtLink to="/cabinet" class="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
+            My Pills
+          </NuxtLink>
+          <AuthButton />
+        </div>
       </div>
     </header>
     <main class="max-w-2xl mx-auto px-4 py-8">
