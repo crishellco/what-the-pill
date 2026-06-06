@@ -1,6 +1,11 @@
 <script setup>
 import { useSupabaseUser, useSupabaseCookieRedirect } from '#imports'
 
+useSiteSeo({
+  title: 'Confirming Sign In',
+  noindex: true,
+})
+
 const user = useSupabaseUser()
 const redirect = useSupabaseCookieRedirect()
 

@@ -2,6 +2,12 @@
 import { useSupabaseUser } from '#imports'
 import { isPillInCabinet, findCabinetPill } from '#shared/pillIdentity'
 
+useSiteSeo({
+  title: 'Identify Pills',
+  description:
+    'Identify pills by photo, imprint code, or description. Check drug interactions and save matches to your cabinet.',
+})
+
 const inputMode = ref('imprint')
 const imprintQuery = ref('')
 const describeQuery = ref('')

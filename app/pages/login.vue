@@ -3,6 +3,12 @@ import { useSupabaseClient, useSupabaseUser } from '#imports'
 
 definePageMeta({ layout: 'default' })
 
+useSiteSeo({
+  title: 'Sign In',
+  description: 'Sign in to save pills and manage your personal medication cabinet.',
+  noindex: true,
+})
+
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const { public: { siteUrl } } = useRuntimeConfig()

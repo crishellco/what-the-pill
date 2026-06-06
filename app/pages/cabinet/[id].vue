@@ -7,6 +7,16 @@ const { confirm } = useConfirm()
 const pillId = computed(() => decodeURIComponent(String(route.params.id || '')))
 const pill = computed(() => cabinet.value.find(p => p.id === pillId.value))
 
+useSiteSeo({
+  title: computed(() => (pill.value?.name ? `${pill.value.name} · Cabinet` : 'Cabinet Pill')),
+  description: computed(() =>
+    pill.value?.name
+      ? `View details for ${pill.value.name} in your What The Pill cabinet.`
+      : 'View a saved medication in your personal pill cabinet.'
+  ),
+  noindex: true,
+})
+
 watch([ready, cabinetLoading, pillId, cabinet], () => {
   if (!ready.value || cabinetLoading.value) return
   if (!cabinet.value.length) return

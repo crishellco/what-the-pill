@@ -3,6 +3,12 @@ import { useSupabaseUser } from '#imports'
 
 import { pillMatchesQuery } from '~/utils/cabinetSearch'
 
+useSiteSeo({
+  title: 'My Pill Cabinet',
+  description: 'View saved medications, check interactions, and manage your personal pill cabinet.',
+  noindex: true,
+})
+
 const { cabinet, removeFromCabinet, loading: cabinetLoading, ready, removingId } = useCabinet()
 const user = useSupabaseUser()
 const { confirm } = useConfirm()

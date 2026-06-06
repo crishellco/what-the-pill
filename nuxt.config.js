@@ -4,16 +4,25 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: "What The Pill",
+      htmlAttrs: { lang: "en" },
       meta: [
+        { charset: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
         {
           name: "description",
           content:
-            "Identify pills by photo, imprint code, or description. Check drug interactions.",
+            "Identify pills by photo, imprint code, or description. Check drug interactions and save your personal pill cabinet.",
         },
+        { name: "theme-color", content: "#0F172A" },
+        { name: "application-name", content: "What The Pill" },
+        { property: "og:site_name", content: "What The Pill" },
+        { property: "og:type", content: "website" },
+        { property: "og:locale", content: "en_US" },
+        { name: "twitter:card", content: "summary_large_image" },
       ],
       link: [
         { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+        { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       ],
     },
   },
