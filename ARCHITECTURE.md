@@ -17,7 +17,7 @@ Frontend (Nuxt) → POST /api/identify
                       │
               matches[] (matchSource: gemini)
 
-Supabase: saved_pills (cabinet), identify_cache (7-day TTL), pharma_terms
+Supabase: saved_pills (cabinet), pharma_terms
 Anthropic: /api/interact (drug interactions only)
 ```
 
@@ -28,12 +28,10 @@ Anthropic: /api/interact (drug interactions only)
 | `GEMINI_API_KEY` | Required — all identification |
 | `GEMINI_MODEL` | Optional — default `gemini-2.5-flash` |
 | `ANTHROPIC_API_KEY` | Optional — interaction checks |
-| `NUXT_PUBLIC_SUPABASE_*` | Auth + cabinet + cache |
+| `NUXT_PUBLIC_SUPABASE_*` | Auth + cabinet |
 
 ## Database
 
 ```bash
-npm run db:push    # saved_pills, identify_cache, pharma_terms
+npm run db:push    # saved_pills, pharma_terms
 ```
-
-Migrations drop the old `pill_reference` catalog if it exists from earlier versions.

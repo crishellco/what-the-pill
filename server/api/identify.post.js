@@ -8,7 +8,6 @@
  */
 import { normalizeResponse } from '../utils/pillNormalize.js'
 import { dedupeCabinet, normalizePill } from '#shared/pillIdentity'
-import { getCacheKey, getCachedIdentifyResult, setCachedIdentifyResult } from '../utils/identifyCache.js'
 import { loadPharmaTerms, discoverAndSaveTerms } from '../utils/pharmaTerms.js'
 import { identifyFromTextWithGemini, identifyPillImagesWithGemini } from '../utils/geminiVision.js'
 
@@ -163,12 +162,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Search query is required.' })
   }
 
-  const cacheKey = getCacheKey(mode, query)
-  if (cacheKey) {
-    const cached = await getCachedIdentifyResult(cacheKey)
-    if (cached) return cached
-  }
-
   let geminiResult
   try {
     geminiResult = await identifyFromTextWithGemini(mode, query, config)
@@ -180,11 +173,5 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const result = await handleGeminiResult(geminiResult, { mode, query })
-
-  if (cacheKey) {
-    await setCachedIdentifyResult(cacheKey, mode, result)
-  }
-
-  return result
+  return handleGeminiResult(geminiResult, { mode, query })
 })

@@ -2,7 +2,6 @@ import { DEFAULT_SALT_SUFFIXES, DEFAULT_BRAND_NAMES } from '#shared/pharmaDefaul
 import {
   configurePillIdentity,
   discoverTermsFromPill,
-  getPharmaTerms
 } from '#shared/pillIdentity'
 import { useSupabaseAdmin } from './supabaseAdmin.js'
 
@@ -110,8 +109,4 @@ export async function discoverAndSaveTerms(matches = []) {
     salts: [...salts],
     brands: [...brands]
   })
-}
-
-export function getCachedPharmaTerms() {
-  return getPharmaTerms()
 }

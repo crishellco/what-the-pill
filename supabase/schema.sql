@@ -1,7 +1,0 @@
--- Deprecated: use Supabase CLI migrations instead.
---
---   npm run db:push          apply pending migrations to linked remote project
---   npm run db:migration:new -- <name>   create a new migration file
---
--- Migration files live in supabase/migrations/
--- One-time setup: npm run db:link
